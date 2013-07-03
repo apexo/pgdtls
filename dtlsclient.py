@@ -1,13 +1,16 @@
 import socket
 import select
-from gnutls_ffi import ffi
+import errno
+
+from gnutls_ffi import ffi, lib
 from gnutls import PSKClientCredentials, Priority
 from dtlstest import DTLSSocket, NotConnected, HandshakeInProgress
 from reactor import Reactor, clock
 from util import log
+from sockmsg import addrtuple_to_name
 
 INTERVAL = 1
-PEER = ("::1", 11111)
+NAME = addrtuple_to_name(socket.AF_INET6, ("::1", 11111))
 PAYLOAD = b"hi"*580
 PAYLOAD_BUFFER = ffi.new("unsigned char[]", PAYLOAD)
 PAYLOAD_SIZE = len(PAYLOAD)
@@ -16,18 +19,18 @@ stat = [0, 0, clock()]
 last = list(stat)
 
 class Callback(object):
-	def connected(self, sock, peer):
-		log("connected: %r %r" % (sock, peer))
+	def handshake(self, conn):
+		log("handshake: %r" % (conn,))
 
-	def newpeer(self, sock, peer):
-		log("newpeer: %r %r" % (sock, peer))
+	def connected(self, conn):
+		log("connected: %r" % (conn,))
 
-	def recvfrom(self, data, size, seq, sock, peer):
-		stat[1] += size
+	def recvfrom(self, data, data_len, seq, conn):
+		stat[1] += data_len
 		#log("recvfrom: %r %r %r %r" % (data, seq, sock, peer))
 
-	def gone(self, sock, peer):
-		log("gone: %r %r" % (sock, peer))
+	def gone(self, conn):
+		log("gone: %r" % (conn,))
 
 s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
 s.bind(("::", 0))
@@ -39,13 +42,25 @@ credentials.set(b"user", b"password")
 
 priority = Priority(b"SECURE192:+PSK")
 
-dsock = DTLSSocket(Callback(), s.sendto, reactor, priority, credentials, None)
+def sendmsg(msg, fd=s.fileno()):
+	#print("SENDMSG %r(%r) to %r" % (msg, msg.msg_iov[0].iov_len, ffi.buffer(msg.msg_name, msg.msg_namelen)[:]))
+	res = lib.sendmsg(fd, msg, 0)
+	if res < 0:
+		log("SENDMSG(%d, %r, 0) = %d" % (fd, msg, res))
+	return res
 
-def recvfrom(events, s, dsock):
-	n, peer = s.recvfrom_into(dsock.buffer, dsock.buffer_size)
-	dsock.recvfrom(n, peer)
+dsock = DTLSSocket(socket.AF_INET6, Callback(), sendmsg, reactor, priority, credentials, None)
 
-def ping(_, addr):
+def recvmsg(events, s, dsock, fd=s.fileno()):
+	n = lib.recvmsg(fd, dsock.msg, 0)
+	if n > 0:
+		dsock.recvmsg(n)
+	elif n < 0:
+		log("RECVMSG(%d, %r, 0) = %d" % (fd, msg, n))
+	else:
+		raise ValueError("EOF")
+
+def ping(_, name):
 	global last
 	try:
 		if clock() >= stat[2] + 1:
@@ -53,28 +68,29 @@ def ping(_, addr):
 			stat[2] += 1
 			last = list(stat)
 		for _ in range(100):
-			dsock.sendto(PAYLOAD_BUFFER, PAYLOAD_SIZE, addr)
+			dsock.sendto(PAYLOAD_BUFFER, PAYLOAD_SIZE, name)
 			stat[0] += PAYLOAD_SIZE
-		reactor.deferIdle(ping, None, addr)
+		reactor.deferIdle(ping, None, name)
 	except HandshakeInProgress:
 		log("handshake in progress")
-		reactor.scheduleMonotonic(clock() + INTERVAL, ping, addr)
+		reactor.scheduleMonotonic(clock() + INTERVAL, ping, name)
 	except NotConnected:
 		log("not connected - connecting")
-		dsock.connect(addr)
-		reactor.scheduleMonotonic(clock() + INTERVAL, ping, addr)
+		dsock.connect(name)
+		reactor.scheduleMonotonic(clock() + INTERVAL, ping, name)
 
-reactor.register(s.fileno(), select.EPOLLIN, recvfrom, s, dsock)
-reactor.deferIdle(ping, None, PEER)
+reactor.register(s.fileno(), select.EPOLLIN, recvmsg, s, dsock)
+reactor.deferIdle(ping, None, NAME)
 
+"""
 from libp.threading.Profiler import sampling_profiler, thread_init
 import sys
-
 thread_init()
 sys.setcheckinterval(1)
 sampling_profiler(reactor.run, 0.001)
+"""
 
-#reactor.run()
+reactor.run()
 
 #while True:
 #	n, peer = s.recvfrom_into(dsock.buffer, dsock.buffer_size)

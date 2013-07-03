@@ -10,4 +10,6 @@ ffi.cdef(hdr.CDEF)
 lib = ffi.verify("""
 #include <gnutls/gnutls.h>
 #include <gnutls/dtls.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 """, libraries=["gnutls"])

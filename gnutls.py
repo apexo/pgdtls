@@ -152,25 +152,26 @@ class CertificateCredentials(object):
 		lib.gnutls_certificate_set_verify_function(self._verifyFunction)
 
 class Session(object):
-	__slots__ = ["v", "_credentials", "_sendto", "_addr", "__push", "__pull_timeout", "__pull", "_queue", "next_timeout", "__vec_push"]
+	__slots__ = ["v", "ptr", "_credentials", "_sendmsg", "_addr", "__push", "__pull_timeout", "__pull", "_queue", "next_timeout", "__vec_push", "_msg"]
 
 	handshake_timeout = 5000
 
-	def __init__(self, flags, sendto, addr):
-		self.v = ffi.new("gnutls_session_t*")
-		GNUTLSError.check(lib.gnutls_init(self.v, flags))
-		self._sendto = sendto
-		self._addr = addr
+	def __init__(self, flags, sendmsg, msg):
+		self.ptr = ffi.new("gnutls_session_t*")
+		GNUTLSError.check(lib.gnutls_init(self.ptr, flags))
+		self.v = self.ptr[0]
+		self._msg = msg
+		self._sendmsg = sendmsg
 		self.__push = ffi.callback("gnutls_push_func", self._push)
 		self.__vec_push = ffi.callback("gnutls_vec_push_func", self._vec_push)
 		self.__pull = ffi.callback("gnutls_pull_func", self._pull)
 		self.__pull_timeout = ffi.callback("gnutls_pull_timeout_func", self._pull_timeout)
-		lib.gnutls_transport_set_push_function(self.v[0], self.__push)
-		lib.gnutls_transport_set_vec_push_function(self.v[0], self.__vec_push)
-		lib.gnutls_transport_set_pull_function(self.v[0], self.__pull)
-		lib.gnutls_transport_set_pull_timeout_function(self.v[0], self.__pull_timeout)
-		#lib.gnutls_handshake_set_timeout(self.v[0], self.handshake_timeout)
-		self._queue = []
+		lib.gnutls_transport_set_push_function(self.v, self.__push)
+		lib.gnutls_transport_set_vec_push_function(self.v, self.__vec_push)
+		lib.gnutls_transport_set_pull_function(self.v, self.__pull)
+		lib.gnutls_transport_set_pull_timeout_function(self.v, self.__pull_timeout)
+		#lib.gnutls_handshake_set_timeout(self.v, self.handshake_timeout)
+		self._queue = None
 
 	@property
 	def credentials(self):
@@ -179,97 +180,87 @@ class Session(object):
 	@credentials.setter
 	def credentials(self, credentials):
 		if credentials is None:
-			lib.gnutls.credentials_clear(self.v[0])
+			lib.gnutls.credentials_clear(self.v)
 		else:
-			GNUTLSError.check(lib.gnutls_credentials_set(self.v[0], credentials._type, credentials.v[0]))
+			GNUTLSError.check(lib.gnutls_credentials_set(self.v, credentials._type, credentials.v[0]))
 		self._credentials = credentials
 
 	def certificateVerifyPeers(self, hostname):
 		hostname = None if hostname is None else cstring_wrap(hostname)
 		status = ffi.new("unsigned int*")
-		GNUTLSError.check(lib.gnutls_certificate_verify_peers3(self.v[0], hostname, status))
+		GNUTLSError.check(lib.gnutls_certificate_verify_peers3(self.v, hostname, status))
 		GNUTLSCertificateError.check(status[0])
 
-	def handshake(self):
-		GNUTLSError.check(lib.gnutls_handshake(self.v[0]))
-
-	def handshake_resume(self, data):
-		if data is not None:
-			self._queue.append(data)
-		GNUTLSError.check(lib.gnutls_handshake(self.v[0]))
+	def handshake(self, data):
+		self._queue = data # data may be None
+		GNUTLSError.check(lib.gnutls_handshake(self.v))
 
 	def recv_into_seq(self, data, buffer, size, seq):
-		if data is not None:
-			self._queue.append(data)
-		return GNUTLSError.check(lib.gnutls_record_recv_seq(self.v[0], buffer, size, seq))
+		self._queue = data # data may not be None
+		return GNUTLSError.check(lib.gnutls_record_recv_seq(self.v, buffer, size, seq))
 
 	def send(self, data, size):
-		return GNUTLSError.check(lib.gnutls_record_send(self.v[0], data, size))
+		return GNUTLSError.check(lib.gnutls_record_send(self.v, data, size))
 
 	def _push(self, transport, data, length):
-		return self._sendto(ffi.buffer(data, length), self._addr)
+		self._msg.set(data, length)
+		return self._sendmsg(self._msg.msg)
 
-	def _vec_push(self, transport, iov, iovcnt):
-		if iovcnt == 1:
-			return self._sendto(ffi.buffer(iov[0].iov_base, iov[0].iov_len), self._addr)
-		size = sum(iov[i].iov_len for i in range(iovcnt))
-		temp = bytearray(size)
-		j = 0
-		for i in range(iovcnt):
-			l = iov[i].iov_len
-			k = j+l
-			temp[j:k] = ffi.buffer(iov[i].iov_base, l)
-			j = k
-		return self._sendto(temp, self._addr)
+	def _vec_push(self, transport, iov, iovcnt, tt=ffi.typeof("struct iovec*")):
+		self._msg.set_vec(ffi.cast(tt, iov), iovcnt)
+		return self._sendmsg(self._msg.msg)
 
 	def _pull(self, transport, buffer, size):
-		if not self._queue:
-			#log("PULL EOF")
-			lib.gnutls_transport_set_errno(self.v[0], errno.EAGAIN)
+		data = self._queue
+		self._queue = None
+		if not data:
+			lib.gnutls_transport_set_errno(self.v, errno.EAGAIN)
 			return -1
-		data = self._queue.pop(0)
-		#log("PULL %r bytes, %r packets remaining" % (len(data), len(self._queue)))
 		target = ffi.buffer(buffer, size)
 		n = min(size, len(data))
 		target[:n] = data[:n]
 		return n
 
 	def _pull_timeout(self, transport, timeout):
-		#log("PULL TIMEOUT %r" % (timeout,))
 		if self._queue:
-			#log("PULL TIMEOUT READY")
 			return 1
-		#log("PULL TIMEOUT AGAIN")
 		self.next_timeout = timeout
 		return 0
 
-	dtls_prestate = property(None, lambda self, prestate: lib.gnutls_dtls_prestate_set(self.v[0], prestate))
-	priority = property(None, lambda self, priority: lib.gnutls_priority_set(self.v[0], priority.v[0]))
+	dtls_prestate = property(None, lambda self, prestate: lib.gnutls_dtls_prestate_set(self.v, prestate))
+	priority = property(None, lambda self, priority: lib.gnutls_priority_set(self.v, priority.v))
 
 	@property
 	def alert(self):
-		alert = lib.gnutls_alert_get(self.v[0])
+		alert = lib.gnutls_alert_get(self.v)
 		return alert, ffi.string(lib.gnutls_alert_get_name(alert))
 
 	@property
 	def dtls_timeout(self):
-		return lib.gnutls_dtls_get_timeout(self.v[0])
+		return lib.gnutls_dtls_get_timeout(self.v)
 
 	@property
 	def dtls_data_mtu(self):
-		return lib.gnutls_dtls_get_data_mtu(self.v[0])
+		return lib.gnutls_dtls_get_data_mtu(self.v)
+
+	def set_errno(self):
+		eno = getattr(lib, "__errno_location")()[0]
+		log("ERROR %d: %s" % (eno, errno.errorcode[eno]))
+		lib.gnutls_transport_set_errno(self.v, eno)
+		return -1
 
 class Priority(object):
-	__slots__ = ["v"]
+	__slots__ = ["v", "ptr"]
 
 	def __init__(self, priorities):
 		global b, res, err_pos
-		self.v = ffi.new("gnutls_priority_t*")
+		self.ptr = ffi.new("gnutls_priority_t*")
 		b = cstring_wrap(priorities)
 		err_pos = ffi.new("const char**")
-		res = lib.gnutls_priority_init(self.v, b, err_pos)
+		res = lib.gnutls_priority_init(self.ptr, b, err_pos)
 		err_pos = int(ffi.cast("intptr_t", err_pos[0])) - int(ffi.cast("intptr_t", b))
 		GNUTLSError.check(res, priorities, err_pos)
+		self.v = self.ptr[0]
 
 def global_init():
 	GNUTLSError.check(lib.gnutls_global_init())

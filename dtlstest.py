@@ -10,6 +10,7 @@ from gnutls_dtls import CookieFactory
 
 from reactor import clock
 from util import log
+from sockmsg import TargetedMessage, name_to_addrtuple, addrtuple_to_name
 
 class TooManyConnections(Exception):
 	pass
@@ -21,22 +22,21 @@ class HandshakeInProgress(NotConnected):
 	pass
 
 class Callback(object):
-	def connected(self, sock, peer):
+	def handshake(self, conn):
 		pass
 
-	def newpeer(self, sock, peer):
+	def connected(self, conn):
 		pass
 
-	def recvfrom(self, data, seq, sock, peer):
+	def recvfrom(self, data, data_len, seq, conn):
 		pass
 
-	def gone(self, sock, peer):
+	def gone(self, conn):
 		pass
 
 class _s_initial(object):
 	@classmethod
 	def enter(s, conn):
-		conn.sock._callback.newpeer(conn.sock, conn.peeraddr)
 		return s
 
 	@classmethod
@@ -52,19 +52,19 @@ class _s_initial(object):
 		raise NotConnected()
 
 	@classmethod
-	def handshake(s, conn):
-		return _s_handshake.enter(conn)
+	def handshake(s, conn, data):
+		return _s_handshake.enter(conn, data)
 
 class _s_disconnected(_s_initial):
 	@classmethod
 	def enter(s, conn):
 		conn.timeout.stop()
-		conn.sock._callback.gone(conn.sock, conn.peeraddr)
-		conn.sock._drop(conn.peeraddr)
+		conn.sock._callback.gone(conn)
+		conn.sock._drop(conn.name)
 		return s
 
 	@classmethod
-	def handshake(s, conn):
+	def handshake(s, conn, data):
 		raise NotConnected()
 
 def handle_alert(conn):
@@ -80,14 +80,15 @@ def handle_alert(conn):
 
 class _s_handshake(object):
 	@classmethod
-	def enter(s, conn):
+	def enter(s, conn, data):
+		conn.sock._callback.handshake(conn)
 		conn._handshake_timeout = clock() + conn.sock.handshake_timeout
-		return s.recv(conn, None)
+		return s.recv(conn, data)
 
 	@classmethod
 	def recv(s, conn, data):
 		try:
-			conn.session.handshake_resume(data)
+			conn.session.handshake(data)
 			return _s_connected.enter(conn)
 		except GNUTLSError as e:
 			if e.errno == GNUTLS_E_AGAIN:
@@ -119,7 +120,7 @@ class _s_handshake(object):
 class _s_connected(object):
 	@classmethod
 	def enter(s, conn):
-		conn.sock._callback.connected(conn.sock, conn.peeraddr)
+		conn.sock._callback.connected(conn)
 		conn.timeout.start(conn.sock.connection_timeout * 0.34)
 		return s
 
@@ -133,10 +134,10 @@ class _s_connected(object):
 				# apparently this happens when the server restarts while the client thinks it has an active session
 				return _s_disconnected.enter(conn)
 			elif e.errno == GNUTLS_E_REHANDSHAKE:
-				return _s_handshake.enter(conn)
+				return _s_handshake.enter(conn, None) # maybe w/ data, does not seem to make much of a difference?
 			else:
 				raise
-		sock._callback.recvfrom(sock._recvbuffer, n, sock._get_seq(), sock, conn)
+		sock._callback.recvfrom(sock._recvbuffer, n, sock._get_seq(), conn)
 		return s
 
 	@classmethod
@@ -153,7 +154,7 @@ class _s_connected(object):
 
 	@classmethod
 	def handshake(s, conn):
-		return _s_handshake.enter(conn)
+		return _s_handshake.enter(conn, None)
 
 class Timeout(object):
 	__slots__ = ["_id", "_timeout", "_conn", "_pending", "_stopped"]
@@ -188,16 +189,17 @@ class Timeout(object):
 		self._conn.reactor.scheduleMonotonic(self._timeout, self, self._id)
 
 class DTLSConnection(object):
-	__slots__ = ["peeraddr", "client", "session", "state", "reactor", "timeout", "sock", "_handshake_timeout", "last_outbound", "last_inbound"]
+	__slots__ = ["name", "client", "session", "state", "reactor", "timeout", "sock", "_handshake_timeout", "last_outbound", "last_inbound", "msg"]
 
-	def __init__(self, sock, priority, credentials, peeraddr, client, prestate=None):
+	def __init__(self, sock, priority, credentials, name, client, prestate=None):
 		assert client == (prestate is None)
 		assert priority is not None
 		assert credentials is not None
-		self.peeraddr = peeraddr
 		self.client = client
 		flags = (GNUTLS_CLIENT if client else GNUTLS_SERVER) | GNUTLS_DATAGRAM | GNUTLS_NONBLOCK
-		self.session = Session(flags, sock._sendto, peeraddr)
+		self.name = name
+		self.msg = TargetedMessage(name)
+		self.session = Session(flags, sock._sendmsg, self.msg)
 		self.session.priority = priority
 		self.session.credentials = AnonClientCredentials()
 		self.reactor = sock._reactor
@@ -209,15 +211,21 @@ class DTLSConnection(object):
 		self.last_inbound = self.last_outbound = clock()
 		self.state = _s_initial.enter(self)
 
-	def connect(self):
-		self.state = self.state.handshake(self)
+	def connect(self, data=None):
+		self.state = self.state.handshake(self, data)
 
 	def recv(self, data):
+		self.last_inbound = clock()
 		self.state = self.state.recv(self, data)
 
 	def send(self, data, size):
+		self.last_outbound = clock()
 		self.state, n = self.state.send(self, data, size)
 		return n
+
+	@property
+	def peeraddr(self):
+		return name_to_addrtuple(self.name)
 
 	def __repr__(self):
 		return "<DTLSConnection with peer %s in state %s>" % (self.peeraddr, self.state)
@@ -230,48 +238,67 @@ class DTLSSocket(object):
 	recvbuffer_size = 65536
 	unpack_seq = struct.Struct("!Q").unpack_from
 
-	def __init__(self, callback, sendto, reactor, priority, clientCredentials=None, serverCredentials=None):
+	def __init__(self, family, callback, sendmsg, reactor, priority, clientCredentials=None, serverCredentials=None):
+		self.family = family
 		self._connections = {}
 		self._callback = callback
-		self._sendto = sendto
+		self._sendmsg = sendmsg
 		self._reactor = reactor
-		self._cookieFactory = CookieFactory(sendto)
+		self._cookieFactory = CookieFactory(sendmsg)
 		self._priority = priority
 		self._clientCredentials = clientCredentials
 		self._serverCredentials = serverCredentials
-		self.buffer = self._cookieFactory.buffer
-		self.buffer_size = self._cookieFactory.buffer_size
 		self._recvbuffer = ffi.new("unsigned char[]", self.recvbuffer_size)
 		self.recvbuffer = ffi.buffer(self._recvbuffer)
 		self._seq = ffi.new("unsigned char[]", 8)
 		self._seq2 = ffi.cast("void*", self._seq)
 		self._seqb = ffi.buffer(self._seq)
 
-	def _sendto(self, data, addr):
-		log("SEND %r to %r" % (len(data), addr))
-		return self.__sendto(data, addr)
+		self._buffer = ffi.new("unsigned char[]", 2048)
+		self._iov = ffi.new("struct iovec[]", 1)
+		self._iov[0].iov_base = self._buffer
+		self._iov[0].iov_len = len(self._buffer)
+
+		self._name = ffi.new("struct sockaddr_storage*")
+
+		self.msg = ffi.new("struct msghdr*")
+		self.msg.msg_iov = self._iov
+		self.msg.msg_iovlen = 1
+		self.msg.msg_controllen = 0
+		self.msg.msg_flags = 0
+		self.msg.msg_name = self._name
+		self.msg.msg_namelen = 128
 
 	def _get_seq(self, unpack_from=struct.Struct("!Q").unpack_from):
 		return unpack_from(self._seqb, 0)[0]
 
-	def connect(self, peeraddr):
+	def connect(self, name):
+		assert isinstance(name, bytes)
+		name_to_addrtuple(name)
+
+		connection = self._connections.get(name)
+		if connection is not None:
+			return name
 		if len(self._connections) >= self.connection_limit:
 			raise TooManyConnections()
-		connection = DTLSConnection(self, self._priority, self._clientCredentials, peeraddr, True)
-		self._connections[peeraddr] = connection
+		connection = DTLSConnection(self, self._priority, self._clientCredentials, name, True)
+		self._connections[name] = connection
 		connection.connect()
+		return name
 
-	def _drop(self, peeraddr):
-		key = peeraddr[:2]
-		self._connections.pop(key, None)
+	def _drop(self, name):
+		self._connections.pop(name, None)
 
-	def recvfrom(self, bytes, peeraddr):
+	def recvmsg(self, n):
+		m = self.msg
+		name = ffi.buffer(m.msg_name, m.msg_namelen)[:]
+		#print("RECV FROM %r(%d): %d: %r" % (name, m.msg_namelen, self._iov[0].iov_len, n))
+
 		#log("RECV %r from %r" % (bytes, peeraddr))
-		key = peeraddr[:2]
-		connection = self._connections.get(key)
+		connection = self._connections.get(name)
 		if connection is None:
 			try:
-				self._cookieFactory.verify(bytes, socket.AF_INET if len(peeraddr) == 2 else socket.AF_INET6, peeraddr)
+				self._cookieFactory.verify(self._buffer, n, m.msg_name, m.msg_namelen)
 			except GNUTLSError as e:
 				if e.errno in (GNUTLS_E_BAD_COOKIE, GNUTLS_E_UNEXPECTED_PACKET_LENGTH):
 					self._cookieFactory.send()
@@ -280,18 +307,14 @@ class DTLSSocket(object):
 				return
 			if len(self._connections) >= self.connection_limit:
 				return
-			connection = DTLSConnection(self, self._priority, self._serverCredentials, peeraddr, False, self._cookieFactory.prestate)
-			self._connections[key] = connection
-			connection.session._queue.append(ffi.buffer(self._cookieFactory._buffer, bytes))
-			connection.connect()
+			connection = DTLSConnection(self, self._priority, self._serverCredentials, name, False, self._cookieFactory.prestate)
+			self._connections[name] = connection
+			connection.connect(ffi.buffer(self._buffer, n))
 		else:
-			connection.last_inbound = clock()
-			connection.recv(ffi.buffer(self._cookieFactory._buffer, bytes))
+			connection.recv(ffi.buffer(self._buffer, n))
 
-	def sendto(self, data, size, peeraddr):
-		key = peeraddr[:2]
-		connection = self._connections.get(key)
+	def sendto(self, data, size, name):
+		connection = self._connections.get(name)
 		if connection is None:
-			raise NotConnected()
-		connection.last_outbound = clock()
+			raise NotConnected(name_to_addrtuple(name))
 		return connection.send(data, size)

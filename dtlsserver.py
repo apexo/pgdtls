@@ -7,18 +7,18 @@ from reactor import Reactor
 from util import log
 
 class Callback(object):
-	def newpeer(self, sock, addr):
-		log("newpeer: %r %r" % (sock, addr))
+	def handshake(self, conn):
+		log("handshake: %r" % (conn,))
 
-	def connected(self, sock, peer):
-		log("connected: %r %r" % (sock, peer))
+	def connected(self, conn):
+		log("connected: %r" % (conn,))
 
-	def recvfrom(self, data, size, seq, sock, peer):
+	def recvfrom(self, data, data_len, seq, conn):
 		#log("recvfrom: %r %r %r %r" % (data, seq, sock, peer))
-		sock.sendto(data, size, peer.peeraddr)
+		conn.sock.sendto(data, data_len, conn.name)
 
-	def gone(self, sock, peer):
-		log("gone: %r %r" % (sock, peer))
+	def gone(self, conn):
+		log("gone: %r" % (conn,))
 
 s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
 s.bind(("::", 11111))
@@ -38,13 +38,23 @@ credentials.setFunction(credFunc)
 
 priority = Priority(b"SECURE192:+PSK")
 
-dsock = DTLSSocket(Callback(), s.sendto, reactor, priority, None, credentials)
+def sendmsg(msg, fd=s.fileno()):
+	res = lib.sendmsg(fd, msg, 0)
+	#print("SENDMSG(%d, %r, 0) = %d" % (fd, msg, res))
+	return res
 
-def recvfrom(events, s, dsock):
-	n, peer = s.recvfrom_into(dsock.buffer, dsock.buffer_size)
-	dsock.recvfrom(n, peer)
+def recvmsg(events, s, dsock, fd=s.fileno()):
+	n = lib.recvmsg(fd, dsock.msg, 0)
+	if n < 0:
+		raise IOError(n)
+	if not n:
+		raise ValueError("EOF")
+	#print("RECVMSG: %r: %r" % (dsock.msg, n))
+	dsock.recvmsg(n)
 
-reactor.register(s.fileno(), select.EPOLLIN, recvfrom, s, dsock)
+dsock = DTLSSocket(socket.AF_INET6, Callback(), sendmsg, reactor, priority, None, credentials)
+
+reactor.register(s.fileno(), select.EPOLLIN, recvmsg, s, dsock)
 reactor.run()
 
 #while True:

@@ -94,7 +94,6 @@ class _s_handshake(object):
 		except GNUTLSError as e:
 			if e.errno == GNUTLS_E_AGAIN:
 				to = conn.session.dtls_timeout
-				log("AGAIN, %d" % (to,))
 				if not to:
 					conn.timeout.start(conn._handshake_timeout - clock())
 				else:
@@ -199,7 +198,6 @@ class DTLSConnection(object):
 		self.msg = TargetedMessage(name)
 		self.session = Session(flags, sock._sendmsg, self.msg)
 		self.session.priority = priority
-		self.session.credentials = AnonClientCredentials()
 		self.reactor = sock._reactor
 		self.sock = sock
 		self.timeout = Timeout(self)

@@ -55,7 +55,7 @@ def recvmmsg(events, s, dsock, fd=s.fileno(), mmsg=MMsgHdr()):
 	else:
 		raise ValueError("EOF")
 
-dsock = DTLSSocket(socket.AF_INET6, Callback(), sendmsg, reactor, priority, None, credentials)
+dsock = DTLSSocket(Callback(), sendmsg, reactor, priority, None, credentials)
 
 reactor.register(s.fileno(), select.EPOLLIN, recvmmsg, s, dsock)
 reactor.run()

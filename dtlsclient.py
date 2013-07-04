@@ -49,7 +49,7 @@ def sendmsg(msg, fd=s.fileno()):
 		log("SENDMSG(%d, %r, 0) = %d" % (fd, msg, res))
 	return res
 
-dsock = DTLSSocket(socket.AF_INET6, Callback(), sendmsg, reactor, priority, credentials, None)
+dsock = DTLSSocket(Callback(), sendmsg, reactor, priority, credentials, None)
 
 def recvmmsg(events, s, dsock, fd=s.fileno(), mmsg=MMsgHdr()):
 	n = mmsg.recv(fd)

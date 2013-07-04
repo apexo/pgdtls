@@ -234,8 +234,7 @@ class DTLSSocket(object):
 	handshake_timeout = 32
 	recvbuffer_size = 65536
 
-	def __init__(self, family, callback, sendmsg, reactor, priority, clientCredentials=None, serverCredentials=None):
-		self.family = family
+	def __init__(self, callback, sendmsg, reactor, priority, clientCredentials=None, serverCredentials=None):
 		self._connections = {}
 		self._callback = callback
 		self._sendmsg = sendmsg

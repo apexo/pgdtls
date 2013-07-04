@@ -60,8 +60,8 @@ class _s_disconnected(_s_initial):
 	def enter(s, conn):
 		conn.timeout.stop()
 		conn.sock._drop(conn.name)
+		conn.state = s
 		conn.sock._callback.gone(conn)
-		return s
 
 	@classmethod
 	def handshake(s, conn, data):
@@ -81,30 +81,31 @@ def handle_alert(conn):
 class _s_handshake(object):
 	@classmethod
 	def enter(s, conn, data):
-		conn.sock._callback.handshake(conn)
 		conn._handshake_timeout = clock() + conn.sock.handshake_timeout
-		return s.recv(conn, data)
+		conn.state = s
+		conn.sock._callback.handshake(conn)
+		s.recv(conn, data)
 
 	@classmethod
 	def recv(s, conn, data):
 		try:
 			conn.session.handshake(data)
-			return _s_connected.enter(conn)
+			_s_connected.enter(conn)
 		except GNUTLSError as e:
 			if e.errno == GNUTLS_E_AGAIN:
 				to = conn.session.dtls_timeout
+				log("AGAIN, %d" % (to,))
 				if not to:
 					conn.timeout.start(conn._handshake_timeout - clock())
 				else:
 					conn.timeout.start(min(to * 0.001, conn._handshake_timeout - clock()))
 			elif e.errno == GNUTLS_E_TIMEDOUT:
 				log("TIMEDOUT, dtls timeout=%r, next timeout=%r" % (conn.session.dtls_timeout, conn.session.next_timeout))
-				return _s_disconnected.enter(conn)
+				_s_disconnected.enter(conn)
 			elif e.errno == GNUTLS_E_FATAL_ALERT_RECEIVED:
-				return handle_alert(conn)
+				handle_alert(conn)
 			else:
 				raise
-			return s
 
 	@classmethod
 	def send(s, conn, data, size):
@@ -114,15 +115,15 @@ class _s_handshake(object):
 	def timeout(s, conn):
 		if clock() > conn._handshake_timeout:
 			return _s_disconnected.enter(conn)
-		return s.recv(conn, None)
+		s.recv(conn, None)
 
 
 class _s_connected(object):
 	@classmethod
 	def enter(s, conn):
-		conn.sock._callback.connected(conn)
 		conn.timeout.start(conn.sock.connection_timeout * 0.34)
-		return s
+		conn.state = s
+		conn.sock._callback.connected(conn)
 
 	@classmethod
 	def recv(s, conn, data):
@@ -138,11 +139,10 @@ class _s_connected(object):
 			else:
 				raise
 		sock._callback.recvfrom(sock._recvbuffer, n, sock._get_seq(), conn)
-		return s
 
 	@classmethod
 	def send(s, conn, data, size):
-		return s, conn.session.send(data, size)
+		return conn.session.send(data, size)
 
 	@classmethod
 	def timeout(s, conn):
@@ -150,11 +150,10 @@ class _s_connected(object):
 		if dt > conn.sock.connection_timeout:
 			return _s_disconnected.enter(conn)
 		conn.timeout.start(conn.sock.connection_timeout * 0.34)
-		return s
 
 	@classmethod
 	def handshake(s, conn):
-		return _s_handshake.enter(conn, None)
+		_s_handshake.enter(conn, None)
 
 class Timeout(object):
 	__slots__ = ["_id", "_timeout", "_conn", "_pending", "_stopped"]
@@ -184,8 +183,7 @@ class Timeout(object):
 			return
 		if id_ == self._id:
 			self._pending = False
-			self._conn.state = self._conn.state.timeout(self._conn)
-			return
+			return self._conn.state.timeout(self._conn)
 		self._conn.reactor.scheduleMonotonic(self._timeout, self, self._id)
 
 class DTLSConnection(object):
@@ -212,16 +210,15 @@ class DTLSConnection(object):
 		self.state = _s_initial.enter(self)
 
 	def connect(self, data=None):
-		self.state = self.state.handshake(self, data)
+		self.state.handshake(self, data)
 
 	def recv(self, data):
 		self.last_inbound = clock()
-		self.state = self.state.recv(self, data)
+		self.state.recv(self, data)
 
 	def send(self, data, size):
 		self.last_outbound = clock()
-		self.state, n = self.state.send(self, data, size)
-		return n
+		return self.state.send(self, data, size)
 
 	@property
 	def peeraddr(self):

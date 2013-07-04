@@ -43,5 +43,11 @@ class Datum(object):
 		self.v.size = len(data)
 
 class _GC(object):
+	def __init__(self):
+		self.ptr = ffi.new(self._typename + "*")
+		GNUTLSError.check(self._alloc(self.ptr))
+		self.v = self.ptr[0]
+		super(_GC, self).__init__()
+
 	def __del__(self):
-		self._gc(self.v[0])
+		self._gc(self.v)

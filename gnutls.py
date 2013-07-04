@@ -11,111 +11,101 @@ class _AnonCredentials(object):
 	_type = lib.GNUTLS_CRD_ANON
 
 class AnonServerCredentials(_AnonCredentials, _GC):
-	__slots__ = ["v"]
+	__slots__ = ["v", "ptr"]
 
 	_gc = lib.gnutls_anon_free_server_credentials
+	_alloc = lib.gnutls_anon_allocate_server_credentials
+	_typename = "gnutls_anon_server_credentials_t"
 
-	def __init__(self):
-		self.v = ffi.new("gnutls_anon_server_credentials_t*")
-		GNUTLSError.check(lib.gnutls_anon_allocate_server_credentials(self.v))
-
-class AnonClientCredentials(_AnonCredentials):
-	__slots__ = ["v"]
+class AnonClientCredentials(_AnonCredentials, _GC):
+	__slots__ = ["v", "ptr"]
 
 	_gc = lib.gnutls_anon_free_client_credentials
-
-	def __init__(self):
-		self.v = ffi.new("gnutls_anon_client_credentials_t*")
-		GNUTLSError.check(lib.gnutls_anon_allocate_client_credentials(self.v))
+	_alloc = lib.gnutls_anon_allocate_client_credentials
+	_typename = "gnutls_anon_client_credentials_t"
 
 class _PSKCredentials(object):
 	_type = lib.GNUTLS_CRD_PSK
 
 class PSKServerCredentials(_PSKCredentials, _GC):
-	__slots__ = ["v", "_function", "_paramsFunction"]
+	__slots__ = ["v", "ptr", "_function", "_paramsFunction"]
 
 	_gc = lib.gnutls_psk_free_server_credentials
-
-	def __init__(self):
-		self.v = ffi.new("gnutls_psk_server_credentials_t*")
-		GNUTLSError.check(lib.gnutls_psk_allocate_server_credentials(self.v))
+	_alloc = lib.gnutls_psk_allocate_server_credentials
+	_typename = "gnutls_psk_server_credentials_t"
 
 	def setFile(self, password_file):
-		GNUTLSError.check(lib.gnutls_psk_set_server_credentials_file(self.v[0], cstring_wrap(password_file)))
+		GNUTLSError.check(lib.gnutls_psk_set_server_credentials_file(self.v, cstring_wrap(password_file)))
 
 	def setFunction(self, func):
 		self._function = ffi.callback("gnutls_psk_server_credentials_function", func)
-		lib.gnutls_psk_set_server_credentials_function(self.v[0], self._function)
+		lib.gnutls_psk_set_server_credentials_function(self.v, self._function)
 
 	def setHint(self, hint):
-		GNUTLSError.check(lib.gnutls_psk_set_server_credentials_hint(self.v[0], cstring_wrap(hint)))
+		GNUTLSError.check(lib.gnutls_psk_set_server_credentials_hint(self.v, cstring_wrap(hint)))
 
 	def setDHParams(self, dh_params):
-		lib.gnutls_psk_set_server_dh_params(self.v[0], dh_params.v[0])
+		lib.gnutls_psk_set_server_dh_params(self.v, dh_params.v[0])
 
 	def setParamsFunction(self, func):
 		self._paramsFunction = ffi.callback("gnutls_params_function", func)
-		lib.gnutls_psk_set_server_params_function(self.v[0], self._paramsFunction)
+		lib.gnutls_psk_set_server_params_function(self.v, self._paramsFunction)
 
 class PSKClientCredentials(_PSKCredentials, _GC):
-	__slots__ = ["v", "_function"]
+	__slots__ = ["v", "ptr", "_function"]
 
 	_gc = lib.gnutls_psk_free_client_credentials
-
-	def __init__(self):
-		self.v = ffi.new("gnutls_psk_client_credentials_t*")
-		GNUTLSError.check(lib.gnutls_psk_allocate_client_credentials(self.v))
+	_alloc = lib.gnutls_psk_allocate_client_credentials
+	_typename = "gnutls_psk_client_credentials_t"
 
 	def set(self, username, key, flags=lib.GNUTLS_PSK_KEY_RAW):
 		assert flags in (lib.GNUTLS_PSK_KEY_RAW, lib.GNUTLS_PSK_KEY_HEX)
 		key = Datum(key)
 		username = cstring_wrap(username)
-		GNUTLSError.check(lib.gnutls_psk_set_client_credentials(self.v[0], username, key.v, flags))
+		GNUTLSError.check(lib.gnutls_psk_set_client_credentials(self.v, username, key.v, flags))
 
 	def setFunction(self, func):
 		self._function = ffi.callback("gnutls_psk_client_credentials_function", func)
-		lib.gnutls_psk_set_client_credentials_function(self.v[0], self._function)
+		lib.gnutls_psk_set_client_credentials_function(self.v, self._function)
 
 class CertificateCredentials(object):
-	__slots__ = ["v", "_verifyFunction"]
+	__slots__ = ["v", "ptr", "_verifyFunction"]
 
 	_type = lib.GNUTLS_CRD_CERTIFICATE
 	_gc = lib.gnutls_certificate_free_credentials
-
-	def __init__(self):
-		self.v = ffi.new("gnutls_certificate_credentials_t*")
-		GNUTLSError.check(lib.gnutls_certificate_allocate_credentials(self.v))
+	_alloc = lib.gnutls_certificate_allocate_credentials
+	_typename = "gnutls_certificate_credentials_t"
 
 	def setX509SystemTrust(self):
-		return GNUTLSError.check(lib.gnutls_certificate_set_x509_system_trust(self.v[0]))
+		return GNUTLSError.check(lib.gnutls_certificate_set_x509_system_trust(self.v))
 
 	def setX509TrustFile(self, cafile, type):
 		assert type in (lib.GNUTLS_X509_FMT_PEM, lib.GNUTLS_X509_FMT_DER)
-		return GNUTLSError.check(lib.gnutls_certificate_set_x509_trust_file(self.v[0], cstring_wrap(cafile), type))
+		return GNUTLSError.check(lib.gnutls_certificate_set_x509_trust_file(self.v, cstring_wrap(cafile), type))
 
 	def setX509TrustMem(self, ca, type):
 		assert type in (lib.GNUTLS_X509_FMT_PEM, lib.GNUTLS_X509_FMT_DER)
 		ca = Datum(ca)
-		return GNUTLSError.check(lib.gnutls_certificate_set_x509_trust_mem(self.v[0], ca.v, type))
+		return GNUTLSError.check(lib.gnutls_certificate_set_x509_trust_mem(self.v, ca.v, type))
 
 	def setX509CRLFile(self, crtfile, type):
 		assert type in (lib.GNUTLS_X509_FMT_PEM, lib.GNUTLS_X509_FMT_DER)
-		return GNUTLSError.check(lib.gnutls_certificate_set_x509_crl_file(self.v[0], cstring_wrap(crlfile), type))
+		return GNUTLSError.check(lib.gnutls_certificate_set_x509_crl_file(self.v, cstring_wrap(crlfile), type))
 
 	def setX509CRLMem(self, ca, type):
 		assert type in (lib.GNUTLS_X509_FMT_PEM, lib.GNUTLS_X509_FMT_DER)
 		crl = Datum(crl)
-		return GNUTLSError.check(lib.gnutls_certificate_set_x509_crl_mem(self.v[0], crl.v, type))
+		return GNUTLSError.check(lib.gnutls_certificate_set_x509_crl_mem(self.v, crl.v, type))
 
 	def setX509KeyFile(self, certfile, keyfile, type):
 		assert type in (lib.GNUTLS_X509_FMT_PEM, lib.GNUTLS_X509_FMT_DER)
-		return GNUTLSError.check(lib.gnutls_certificate_set_x509_key_file(self.v[0], cstring_wrap(certfile), cstring_wrap(keyfile), type))
+		return GNUTLSError.check(lib.gnutls_certificate_set_x509_key_file(self.v, cstring_wrap(certfile), cstring_wrap(keyfile), type))
 
 	def setX509KeyMem(self, cert, key, type):
 		assert type in (lib.GNUTLS_X509_FMT_PEM, lib.GNUTLS_X509_FMT_DER)
 		cert = Datum(cert)
 		key = Datum(key)
-		return GNUTLSError.check(lib.gnutls_certificate_set_x509_key_mem(self.v[0], cert.v, key.v, type))
+		return GNUTLSError.check(lib.gnutls_certificate_set_x509_key_mem(self.v, cert.v, key.v, type))
 
 	def setX509Key(self, cert_list, key):
 		# TODO
@@ -131,7 +121,7 @@ class CertificateCredentials(object):
 
 	def sendX509RDNSequence(self, status):
 		assert status in (0, 1)
-		lib.gnutls_certificate_send_x509_rdn_sequence(self.v[0], status)
+		lib.gnutls_certificate_send_x509_rdn_sequence(self.v, status)
 
 	@property
 	def verifyFlags(self):
@@ -140,7 +130,7 @@ class CertificateCredentials(object):
 	@verifyFlags.setter
 	def verifyFlags(self, flags):
 		self._verifyFlags = flags
-		lib.gnutls_certificate_set_verify_flags(self.v[0], flags)
+		lib.gnutls_certificate_set_verify_flags(self.v, flags)
 
 	@property
 	def verifyFunction(self):
@@ -182,7 +172,7 @@ class Session(object):
 		if credentials is None:
 			lib.gnutls.credentials_clear(self.v)
 		else:
-			GNUTLSError.check(lib.gnutls_credentials_set(self.v, credentials._type, credentials.v[0]))
+			GNUTLSError.check(lib.gnutls_credentials_set(self.v, credentials._type, credentials.v))
 		self._credentials = credentials
 
 	def certificateVerifyPeers(self, hostname):
@@ -248,6 +238,9 @@ class Session(object):
 		log("ERROR %d: %s" % (eno, errno.errorcode[eno]))
 		lib.gnutls_transport_set_errno(self.v, eno)
 		return -1
+
+	def __del__(self, gc=lib.gnutls_deinit):
+		gc(self.ptr)
 
 class Priority(object):
 	__slots__ = ["v", "ptr"]

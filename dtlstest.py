@@ -236,7 +236,6 @@ class DTLSSocket(object):
 	connection_limit = 100
 	handshake_timeout = 32
 	recvbuffer_size = 65536
-	unpack_seq = struct.Struct("!Q").unpack_from
 
 	def __init__(self, family, callback, sendmsg, reactor, priority, clientCredentials=None, serverCredentials=None):
 		self.family = family

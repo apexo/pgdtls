@@ -63,9 +63,6 @@ class TargetedMessage(object):
 		self.msg.msg_controllen = 0
 		self.msg.msg_flags = 0
 
-	def send(self, fd):
-		return lib.sendmsg(fd, self.msg, 0)
-
 	def set_vec(self, iov, iovlen):
 		self.msg.msg_iov = iov
 		self.msg.msg_iovlen = iovlen

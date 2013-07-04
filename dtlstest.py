@@ -59,8 +59,8 @@ class _s_disconnected(_s_initial):
 	@classmethod
 	def enter(s, conn):
 		conn.timeout.stop()
-		conn.sock._callback.gone(conn)
 		conn.sock._drop(conn.name)
+		conn.sock._callback.gone(conn)
 		return s
 
 	@classmethod

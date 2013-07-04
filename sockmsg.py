@@ -31,7 +31,7 @@ def addrtuple_to_name(family, addr):
 
 def name_to_addrtuple(name):
 	assert isinstance(name, bytes)
-	assert len(name) in (14, 28)
+	assert len(name) in (16, 28)
 	temp = ffi.new("unsigned char[]", name)
 	sa = ffi.cast("struct sockaddr*", temp)
 	return sockaddr_to_addrtuple(sa)
@@ -52,7 +52,7 @@ class TargetedMessage(object):
 	__slots__ = ["name", "msg", "_name", "_iov"]
 
 	def __init__(self, name):
-		assert isinstance(name, bytes) and len(name) in (14, 28), (repr(name), len(name))
+		assert isinstance(name, bytes) and len(name) in (16, 28), (repr(name), len(name))
 		self._name = ffi.new("unsigned char[]", name)
 		self._iov = ffi.new("struct iovec[]", 1)
 		self.name = ffi.buffer(self._name)[:]

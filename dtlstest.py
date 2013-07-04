@@ -254,21 +254,6 @@ class DTLSSocket(object):
 		self._seq2 = ffi.cast("void*", self._seq)
 		self._seqb = ffi.buffer(self._seq)
 
-		self._buffer = ffi.new("unsigned char[]", 2048)
-		self._iov = ffi.new("struct iovec[]", 1)
-		self._iov[0].iov_base = self._buffer
-		self._iov[0].iov_len = len(self._buffer)
-
-		self._name = ffi.new("struct sockaddr_storage*")
-
-		self.msg = ffi.new("struct msghdr*")
-		self.msg.msg_iov = self._iov
-		self.msg.msg_iovlen = 1
-		self.msg.msg_controllen = 0
-		self.msg.msg_flags = 0
-		self.msg.msg_name = self._name
-		self.msg.msg_namelen = 128
-
 	def _get_seq(self, unpack_from=struct.Struct("!Q").unpack_from):
 		return unpack_from(self._seqb, 0)[0]
 
@@ -289,16 +274,13 @@ class DTLSSocket(object):
 	def _drop(self, name):
 		self._connections.pop(name, None)
 
-	def recvmsg(self, n):
-		m = self.msg
-		name = ffi.buffer(m.msg_name, m.msg_namelen)[:]
-		#print("RECV FROM %r(%d): %d: %r" % (name, m.msg_namelen, self._iov[0].iov_len, n))
+	def recvmsg(self, data, datalen, name, namelen):
+		bname = ffi.buffer(name, namelen)[:]
 
-		#log("RECV %r from %r" % (bytes, peeraddr))
-		connection = self._connections.get(name)
+		connection = self._connections.get(bname)
 		if connection is None:
 			try:
-				self._cookieFactory.verify(self._buffer, n, m.msg_name, m.msg_namelen)
+				self._cookieFactory.verify(data, datalen, name, namelen)
 			except GNUTLSError as e:
 				if e.errno in (GNUTLS_E_BAD_COOKIE, GNUTLS_E_UNEXPECTED_PACKET_LENGTH):
 					self._cookieFactory.send()
@@ -307,11 +289,11 @@ class DTLSSocket(object):
 				return
 			if len(self._connections) >= self.connection_limit:
 				return
-			connection = DTLSConnection(self, self._priority, self._serverCredentials, name, False, self._cookieFactory.prestate)
-			self._connections[name] = connection
-			connection.connect(ffi.buffer(self._buffer, n))
+			connection = DTLSConnection(self, self._priority, self._serverCredentials, bname, False, self._cookieFactory.prestate)
+			self._connections[bname] = connection
+			connection.connect(ffi.buffer(data, datalen))
 		else:
-			connection.recv(ffi.buffer(self._buffer, n))
+			connection.recv(ffi.buffer(data, datalen))
 
 	def sendto(self, data, size, name):
 		connection = self._connections.get(name)

@@ -1,5 +1,5 @@
 import socket
-from gnutls_ffi import ffi
+from gnutls_ffi import ffi, lib
 
 def addrtuple_to_sockaddr(family, addr):
 	if family not in (socket.AF_INET, socket.AF_INET6):
@@ -75,3 +75,35 @@ class TargetedMessage(object):
 		self.msg.msg_iovlen = 1
 		self._iov[0].iov_base = base
 		self._iov[0].iov_len = len
+
+class MMsgHdr(object):
+	def __init__(self, vlen=16, buffer_size=2048):
+		self.buffer_size = buffer_size
+		self.vlen = vlen
+
+		self.msgvec = ffi.new("struct mmsghdr[]", vlen)
+		self.iov = ffi.new("struct iovec[]", vlen)
+		self.name = ffi.new("struct sockaddr_storage[]", vlen)
+		self.namelen = ffi.sizeof("struct sockaddr_storage")
+		self.iov_data = ffi.new("unsigned char[]", buffer_size * vlen)
+		self.timeout = ffi.cast("void*", 0)
+
+		for i in range(vlen):
+			hdr = self.msgvec[i].msg_hdr
+			hdr.msg_name = self.name + i
+			hdr.msg_namelen = self.namelen
+			hdr.msg_iov = self.iov + i
+			hdr.msg_iovlen = 1
+			hdr.msg_control = ffi.cast("void*", 0)
+			hdr.msg_controllen = 0
+			hdr.msg_flags = 0
+
+			self.iov[i].iov_base = self.iov_data + buffer_size * i
+			self.iov[i].iov_len = buffer_size
+
+	def reinit(self, n):
+		for i in range(n):
+			self.msgvec[i].msg_hdr.msg_namelen = self.namelen
+
+	def recv(self, fd):
+		return lib.recvmmsg(fd, self.msgvec, self.vlen, 0, self.timeout)

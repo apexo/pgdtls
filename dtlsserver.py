@@ -5,6 +5,7 @@ from gnutls import PSKServerCredentials, Priority
 from dtlstest import DTLSSocket
 from reactor import Reactor
 from util import log
+from sockmsg import MMsgHdr
 
 class Callback(object):
 	def handshake(self, conn):
@@ -43,18 +44,20 @@ def sendmsg(msg, fd=s.fileno()):
 	#print("SENDMSG(%d, %r, 0) = %d" % (fd, msg, res))
 	return res
 
-def recvmsg(events, s, dsock, fd=s.fileno()):
-	n = lib.recvmsg(fd, dsock.msg, 0)
-	if n < 0:
-		raise IOError(n)
-	if not n:
+def recvmmsg(events, s, dsock, fd=s.fileno(), mmsg=MMsgHdr()):
+	n = mmsg.recv(fd)
+	if n > 0:
+		for i in range(n):
+			dsock.recvmsg(mmsg.iov[i].iov_base, mmsg.msgvec[i].msg_len, mmsg.name + i, mmsg.msgvec[i].msg_hdr.msg_namelen)
+		mmsg.reinit(n)
+	elif n < 0:
+		log("RECVMMSG(%d, %r, 0) = %d" % (fd, n))
+	else:
 		raise ValueError("EOF")
-	#print("RECVMSG: %r: %r" % (dsock.msg, n))
-	dsock.recvmsg(n)
 
 dsock = DTLSSocket(socket.AF_INET6, Callback(), sendmsg, reactor, priority, None, credentials)
 
-reactor.register(s.fileno(), select.EPOLLIN, recvmsg, s, dsock)
+reactor.register(s.fileno(), select.EPOLLIN, recvmmsg, s, dsock)
 reactor.run()
 
 #while True:

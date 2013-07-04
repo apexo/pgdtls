@@ -74,8 +74,23 @@ typedef struct msghdr
 	int msg_flags;		/* Flags on received message.  */
 };
 
-ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags);
+typedef struct mmsghdr {
+	struct msghdr msg_hdr;	/* Message header */
+	unsigned int msg_len;	/* Number of received bytes for header */
+};
+
+
+ssize_t sendmsg(int sockfd, struct msghdr *msg, int flags);
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags);
+
+/* FIXME: this is not very portable */
+typedef struct timespec
+{
+	int64_t tv_sec;		/* Seconds.  */
+	int64_t tv_nsec;	/* Nanoseconds.  */
+};
+
+int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsigned int flags, struct timespec *timeout);
 
 """
 

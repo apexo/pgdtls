@@ -7,7 +7,7 @@ from gnutls import PSKClientCredentials, Priority
 from dtlstest import DTLSSocket, NotConnected, HandshakeInProgress
 from reactor import Reactor, clock
 from util import log
-from sockmsg import addrtuple_to_name
+from sockmsg import addrtuple_to_name, MMsgHdr
 
 INTERVAL = 1
 NAME = addrtuple_to_name(socket.AF_INET6, ("::1", 11111))
@@ -51,12 +51,14 @@ def sendmsg(msg, fd=s.fileno()):
 
 dsock = DTLSSocket(socket.AF_INET6, Callback(), sendmsg, reactor, priority, credentials, None)
 
-def recvmsg(events, s, dsock, fd=s.fileno()):
-	n = lib.recvmsg(fd, dsock.msg, 0)
+def recvmmsg(events, s, dsock, fd=s.fileno(), mmsg=MMsgHdr()):
+	n = mmsg.recv(fd)
 	if n > 0:
-		dsock.recvmsg(n)
+		for i in range(n):
+			dsock.recvmsg(mmsg.iov[i].iov_base, mmsg.msgvec[i].msg_len, mmsg.name + i, mmsg.msgvec[i].msg_hdr.msg_namelen)
+		mmsg.reinit(n)
 	elif n < 0:
-		log("RECVMSG(%d, %r, 0) = %d" % (fd, msg, n))
+		log("RECVMMSG(%d, %r, 0) = %d" % (fd, n))
 	else:
 		raise ValueError("EOF")
 
@@ -79,7 +81,7 @@ def ping(_, name):
 		dsock.connect(name)
 		reactor.scheduleMonotonic(clock() + INTERVAL, ping, name)
 
-reactor.register(s.fileno(), select.EPOLLIN, recvmsg, s, dsock)
+reactor.register(s.fileno(), select.EPOLLIN, recvmmsg, s, dsock)
 reactor.deferIdle(ping, None, NAME)
 
 """

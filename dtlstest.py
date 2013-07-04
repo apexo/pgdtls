@@ -259,13 +259,13 @@ class DTLSSocket(object):
 
 		connection = self._connections.get(name)
 		if connection is not None:
-			return name
+			return connection
 		if len(self._connections) >= self.connection_limit:
 			raise TooManyConnections()
 		connection = DTLSConnection(self, self._priority, self._clientCredentials, name, True)
 		self._connections[name] = connection
 		connection.connect()
-		return name
+		return connection
 
 	def _drop(self, name):
 		self._connections.pop(name, None)

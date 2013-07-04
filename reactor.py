@@ -108,16 +108,16 @@ class Reactor(object):
 				item = self.deferred.pop(0)
 				item[0](*item[1], **item[2])
 				continue
-			if not self.scheduled:
-				if not self.events:
-					break
+			if self.deferredIdle:
+				timeout = 0,
+			elif self.scheduled:
+				t1 = self.scheduled[0][0]
+				timeout = t1 - t,
+			elif self.events:
 				t1 = _never
 				timeout = ()
 			else:
-				t1 = self.scheduled[0][0]
-				timeout = t1 - t,
-			if self.deferredIdle:
-				timeout = 0,
+				break
 			try:
 				for fd, events in self.poll.poll(*timeout):
 					idle = False

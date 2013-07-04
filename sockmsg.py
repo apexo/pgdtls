@@ -71,7 +71,6 @@ class TargetedMessage(object):
 		self.msg.msg_iovlen = iovlen
 
 	def set(self, base, len):
-		print("msg.set, %r, %r" % (base, len))
 		self.msg.msg_iov = self._iov
 		self.msg.msg_iovlen = 1
 		self._iov[0].iov_base = base

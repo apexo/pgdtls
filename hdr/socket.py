@@ -74,7 +74,8 @@ typedef struct msghdr
 	int msg_flags;		/* Flags on received message.  */
 };
 
-typedef struct mmsghdr {
+typedef struct mmsghdr
+{
 	struct msghdr msg_hdr;	/* Message header */
 	unsigned int msg_len;	/* Number of received bytes for header */
 };

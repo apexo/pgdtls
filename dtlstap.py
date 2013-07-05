@@ -4,6 +4,7 @@ import errno
 import argparse
 import re
 import sys
+import subprocess
 
 from gnutls_common import GNUTLSError
 from gnutls_const import GNUTLS_E_LARGE_PACKET, GNUTLS_E_MEMORY_ERROR
@@ -171,10 +172,28 @@ def parse_arguments():
 	ap.add_argument("-f", "--psk-file", action="store", type=bytes_type)
 	ap.add_argument("-l", "--listen-port", action="store", type=port, default="0")
 	ap.add_argument("-P", "--priority", action="store", default="SECURE192:+PSK", type=bytes_type)
+	ap.add_argument("--up", action="store", help="script to invoke for configuring the interface")
 	args = ap.parse_args()
 	args.af = args.af or [socket.AF_INET, socket.AF_INET6] # if neither -4 nor -6 is specified: use both, prefer IPv4
 	args.autoConnect = select_autoconnect_names(args)
 	return args
+
+def up(args, tap):
+	if not args.up:
+		return
+
+	connect = []
+	for name in args.autoConnect:
+		addr = name_to_addrtuple(name)
+		if addr[0].startswith("::ffff:"):
+			connect.append(addr[0][7:])
+		else:
+			connect.append(addr[0])
+		connect.append(str(addr[1]))
+
+	rc = subprocess.Popen([args.up] + connect, env={"DEVICE_NAME": tap.name}).wait()
+	if rc:
+		log("error invoking up script: %d" % (rc,))
 
 def main():
 	args = parse_arguments()
@@ -203,6 +222,7 @@ def main():
 	tap.init(False)
 	tap.setMTU(1149)
 	print("/dev/%s" % (tap.name,))
+	up(args, tap)
 
 	cb = Callback(tap, args.autoConnect)
 

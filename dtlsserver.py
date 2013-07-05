@@ -1,11 +1,12 @@
 import socket
 import select
-from gnutls_ffi import lib, ffi
-from gnutls import PSKServerCredentials, Priority
-from dtlstest import DTLSSocket
-from reactor import Reactor
-from util import log
-from sockmsg import MMsgHdr
+
+from pgdtls.ffi import lib, ffi
+from pgdtls import PSKServerCredentials, Priority
+from pgdtls.dtls import DTLSSocket
+from pgdtls.reactor import Reactor
+from pgdtls.util import log
+from pgdtls.sockutil import MMsgHdr
 
 class Callback(object):
 	def handshake(self, conn):
@@ -26,7 +27,6 @@ s.bind(("::", 11111))
 
 def credFunc(session, userName, datum):
 	userName = ffi.string(userName)
-	#log("credFunc(%r)" % ((session, userName, datum),))
 	datum.data = lib.gnutls_malloc(8)
 	ffi.buffer(datum.data, 8)[0:8] = b"password"
 	datum.size = 8
@@ -59,7 +59,3 @@ dsock = DTLSSocket(Callback(), sendmsg, reactor, priority, None, credentials)
 
 reactor.register(s.fileno(), select.EPOLLIN, recvmmsg, s, dsock)
 reactor.run()
-
-#while True:
-#	n, peer = s.recvfrom_into(dsock.buffer, dsock.buffer_size)
-#	dsock.recvfrom(n, peer)

@@ -1,12 +1,12 @@
 import socket
 import select
 
-from gnutls_ffi import ffi, lib
-from gnutls import PSKClientCredentials, Priority
-from dtlstest import DTLSSocket, NotConnected, HandshakeInProgress
-from reactor import Reactor, clock
-from util import log
-from sockmsg import addrtuple_to_name, MMsgHdr
+from pgdtls.ffi import ffi, lib
+from pgdtls import PSKClientCredentials, Priority
+from pgdtls.dtls import DTLSSocket, NotConnected, HandshakeInProgress
+from pgdtls.reactor import Reactor, clock
+from pgdtls.util import log
+from pgdtls.sockutil import addrtuple_to_name, MMsgHdr
 
 INTERVAL = 1
 NAME = addrtuple_to_name(socket.AF_INET6, ("::1", 11111))
@@ -32,7 +32,6 @@ class Callback(object):
 		log("gone: %r" % (conn,))
 
 s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-s.bind(("::", 0))
 
 reactor = Reactor()
 
@@ -42,7 +41,6 @@ credentials.set(b"user", b"password")
 priority = Priority(b"SECURE192:+PSK")
 
 def sendmsg(msg, fd=s.fileno()):
-	#print("SENDMSG %r(%r) to %r" % (msg, msg.msg_iov[0].iov_len, ffi.buffer(msg.msg_name, msg.msg_namelen)[:]))
 	res = lib.sendmsg(fd, msg, 0)
 	if res < 0:
 		log("SENDMSG(%d, %r, 0) = %d" % (fd, msg, res))
@@ -82,17 +80,4 @@ def ping(_, name):
 
 reactor.register(s.fileno(), select.EPOLLIN, recvmmsg, s, dsock)
 reactor.deferIdle(ping, None, NAME)
-
-"""
-from libp.threading.Profiler import sampling_profiler, thread_init
-import sys
-thread_init()
-sys.setcheckinterval(1)
-sampling_profiler(reactor.run, 0.001)
-"""
-
 reactor.run()
-
-#while True:
-#	n, peer = s.recvfrom_into(dsock.buffer, dsock.buffer_size)
-#	dsock.recvfrom(n, peer)

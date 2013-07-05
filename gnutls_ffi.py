@@ -14,6 +14,8 @@ int _io_SIOCSIFMTU(void);
 lib = ffi.verify("""
 #include <gnutls/gnutls.h>
 #include <gnutls/dtls.h>
+
+#define __USE_GNU 1
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <linux/if.h>

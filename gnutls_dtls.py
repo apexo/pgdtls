@@ -1,5 +1,4 @@
 import os
-import socket
 
 from gnutls_ffi import lib, ffi
 from gnutls_common import Datum, GNUTLSError

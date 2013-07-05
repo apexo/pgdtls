@@ -3,8 +3,7 @@ import errno
 from gnutls_ffi import ffi, lib
 from gnutls_const import *
 from gnutls_dtls import *
-from gnutls_common import GNUTLSError, GNUTLSCertificateError, cstring_wrap, bytes_wrap, Datum, _GC
-from reactor import clock
+from gnutls_common import GNUTLSError, GNUTLSCertificateError, cstring_wrap, Datum, _GC
 from util import log
 
 class _AnonCredentials(object):

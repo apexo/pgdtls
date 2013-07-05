@@ -1,16 +1,14 @@
-import time
-import socket
 import struct
 
 from gnutls_ffi import ffi
 from gnutls_const import GNUTLS_SERVER, GNUTLS_CLIENT, GNUTLS_DATAGRAM, GNUTLS_NONBLOCK, GNUTLS_E_AGAIN, GNUTLS_E_BAD_COOKIE, GNUTLS_E_TIMEDOUT, GNUTLS_E_FATAL_ALERT_RECEIVED, GNUTLS_E_REHANDSHAKE, GNUTLS_E_UNEXPECTED_PACKET_LENGTH
 from gnutls_common import GNUTLSError
-from gnutls import Session, AnonClientCredentials
+from gnutls import Session
 from gnutls_dtls import CookieFactory
 
 from reactor import clock
 from util import log
-from sockmsg import TargetedMessage, name_to_addrtuple, addrtuple_to_name
+from sockmsg import TargetedMessage, name_to_addrtuple
 
 class TooManyConnections(Exception):
 	pass

@@ -1,6 +1,5 @@
 import socket
 import select
-import errno
 
 from gnutls_ffi import ffi, lib
 from gnutls import PSKClientCredentials, Priority

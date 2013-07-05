@@ -2,7 +2,6 @@
 
 import socket
 import select
-import errno
 import argparse
 import re
 import sys
@@ -10,7 +9,7 @@ import subprocess
 
 from gnutls_common import GNUTLSError
 from gnutls_const import GNUTLS_E_LARGE_PACKET, GNUTLS_E_MEMORY_ERROR
-from gnutls_ffi import ffi, lib
+from gnutls_ffi import lib
 from gnutls import PSKClientCredentials, Priority, PSKServerCredentials
 from dtlstest import DTLSSocket, NotConnected, HandshakeInProgress
 from reactor import Reactor

@@ -4,7 +4,6 @@ from gnutls_ffi import ffi, lib
 from gnutls_const import *
 from gnutls_dtls import *
 from gnutls_common import GNUTLSError, GNUTLSCertificateError, cstring_wrap, Datum, _GC
-from util import log
 
 class _AnonCredentials(object):
 	_type = lib.GNUTLS_CRD_ANON
@@ -231,12 +230,6 @@ class Session(object):
 	@property
 	def dtls_data_mtu(self):
 		return lib.gnutls_dtls_get_data_mtu(self.v)
-
-	def set_errno(self):
-		eno = getattr(lib, "__errno_location")()[0]
-		log("ERROR %d: %s" % (eno, errno.errorcode[eno]))
-		lib.gnutls_transport_set_errno(self.v, eno)
-		return -1
 
 	def __del__(self, gc=lib.gnutls_deinit):
 		gc(self.ptr)

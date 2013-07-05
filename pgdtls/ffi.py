@@ -2,8 +2,8 @@ import cffi
 
 __all__ = ["ffi", "lib"]
 
-from gnutls_const import *
-import hdr
+from .const import *
+from . import hdr
 
 ffi = cffi.FFI()
 ffi.cdef(hdr.CDEF + """

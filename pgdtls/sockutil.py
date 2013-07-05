@@ -1,5 +1,5 @@
 import socket
-from gnutls_ffi import ffi, lib
+from .ffi import ffi, lib
 
 def addrtuple_to_sockaddr(family, addr):
 	if family not in (socket.AF_INET, socket.AF_INET6):

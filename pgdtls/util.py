@@ -1,4 +1,4 @@
-from reactor import clock
+from .reactor import clock
 
 _t0 = clock()
 

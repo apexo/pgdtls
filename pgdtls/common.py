@@ -1,5 +1,5 @@
-from gnutls_ffi import ffi
-from gnutls_const import GNUTLS_E_MAP
+from . import ffi
+from .const import GNUTLS_E_MAP
 
 class _GNUTLSError(Exception):
 	def __init__(self, errno, *args):

@@ -6,17 +6,17 @@ import argparse
 import re
 import sys
 import subprocess
-
-from gnutls_common import GNUTLSError
-from gnutls_const import GNUTLS_E_LARGE_PACKET, GNUTLS_E_MEMORY_ERROR
-from gnutls_ffi import lib
-from gnutls import PSKClientCredentials, Priority, PSKServerCredentials
-from dtlstest import DTLSSocket, NotConnected, HandshakeInProgress
-from reactor import Reactor
-from util import log
-from sockmsg import addrtuple_to_name, MMsgHdr, name_to_addrtuple
-from tuntap import TUNTAP
 from functools import partial
+
+from pgdtls.common import GNUTLSError
+from pgdtls.const import GNUTLS_E_LARGE_PACKET, GNUTLS_E_MEMORY_ERROR
+from pgdtls.ffi import lib
+from pgdtls import PSKClientCredentials, Priority, PSKServerCredentials
+from pgdtls.dtls import DTLSSocket, NotConnected, HandshakeInProgress
+from pgdtls.reactor import Reactor
+from pgdtls.util import log
+from pgdtls.sockutil import addrtuple_to_name, MMsgHdr, name_to_addrtuple
+from pgdtls.tuntap import TUNTAP
 
 class Callback(object):
 	def __init__(self, tap, autoConnect):

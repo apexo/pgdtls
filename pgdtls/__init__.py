@@ -1,8 +1,8 @@
 import errno
 
-from gnutls_ffi import ffi, lib
-from gnutls_const import *
-from gnutls_common import GNUTLSError, GNUTLSCertificateError, cstring_wrap, Datum, _GC
+from .ffi import ffi, lib
+from .const import *
+from .common import GNUTLSError, GNUTLSCertificateError, cstring_wrap, Datum, _GC
 
 class _AnonCredentials(object):
 	_type = lib.GNUTLS_CRD_ANON

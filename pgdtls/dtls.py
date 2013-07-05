@@ -1,14 +1,13 @@
 import os
 import struct
 
-from gnutls_ffi import lib, ffi
-from gnutls_const import GNUTLS_SERVER, GNUTLS_CLIENT, GNUTLS_DATAGRAM, GNUTLS_NONBLOCK, GNUTLS_E_AGAIN, GNUTLS_E_BAD_COOKIE, GNUTLS_E_TIMEDOUT, GNUTLS_E_FATAL_ALERT_RECEIVED, GNUTLS_E_REHANDSHAKE, GNUTLS_E_UNEXPECTED_PACKET_LENGTH
-from gnutls_common import GNUTLSError, Datum
-from gnutls import Session
-
-from reactor import clock
-from util import log
-from sockmsg import TargetedMessage, name_to_addrtuple
+from .ffi import lib, ffi
+from .const import GNUTLS_SERVER, GNUTLS_CLIENT, GNUTLS_DATAGRAM, GNUTLS_NONBLOCK, GNUTLS_E_AGAIN, GNUTLS_E_BAD_COOKIE, GNUTLS_E_TIMEDOUT, GNUTLS_E_FATAL_ALERT_RECEIVED, GNUTLS_E_REHANDSHAKE, GNUTLS_E_UNEXPECTED_PACKET_LENGTH
+from .common import GNUTLSError, Datum
+from . import Session
+from .reactor import clock
+from .util import log
+from .sockutil import TargetedMessage, name_to_addrtuple
 
 class CookieFactory(object):
 	rnd = Datum(os.urandom(16))

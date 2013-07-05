@@ -2,7 +2,7 @@ import socket
 import fcntl
 import os
 import sys
-from gnutls_ffi import ffi, lib
+from .ffi import ffi, lib
 
 TUN_READQ_SIZE = 500 # Read queue size
 

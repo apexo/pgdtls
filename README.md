@@ -31,7 +31,7 @@ In client mode, dtlstap tries to automatically connect to a server given with -c
     ip route add default via 10.10.1.1 dev $DEVICE_NAME src 10.10.1.2
 
 
-This will set explicit routes for all --connect hosts to, so that they be routed via the current default gateway. Then the default route is replaced.
+This will set explicit routes for all --connect hosts, so that they be routed via the current default gateway. Then the default route is replaced.
 
 Server mode example invocation:
 

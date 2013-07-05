@@ -276,7 +276,7 @@ class DTLSSocket(object):
 				self._cookieFactory.verify(data, datalen, name, namelen)
 			except GNUTLSError as e:
 				if e.errno in (GNUTLS_E_BAD_COOKIE, GNUTLS_E_UNEXPECTED_PACKET_LENGTH):
-					self._cookieFactory.send()
+					self._cookieFactory.send(name, namelen)
 				else:
 					raise
 				return

@@ -31,10 +31,7 @@ class CookieFactory(object):
 		return self._sendmsg(m)
 
 	def verify(self, data, bytes, name, namelen):
-		self._name = name
-		self._namelen = namelen
-		#print("VERIFY: %r %r %r" % (self._buffer, bytearray(self._buffer)[:bytes], bytes))
 		GNUTLSError.check(lib.gnutls_dtls_cookie_verify(self.rnd.v, name, namelen, data, bytes, self.prestate))
 
-	def send(self):
-		return GNUTLSError.check(lib.gnutls_dtls_cookie_send(self.rnd.v, self._name, self._namelen, self.prestate, self.transport, self._push))
+	def send(self, name, namelen):
+		return GNUTLSError.check(lib.gnutls_dtls_cookie_send(self.rnd.v, name, namelen, self.prestate, self.transport, self._push))

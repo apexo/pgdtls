@@ -109,6 +109,7 @@ class Reactor(object):
 				item[0](*item[1], **item[2])
 				continue
 			if self.deferredIdle:
+				t1 = t
 				timeout = 0,
 			elif self.scheduled:
 				t1 = self.scheduled[0][0]

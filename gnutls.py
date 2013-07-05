@@ -141,8 +141,6 @@ class CertificateCredentials(object):
 class Session(object):
 	__slots__ = ["v", "ptr", "_credentials", "_sendmsg", "_addr", "__push", "__pull_timeout", "__pull", "_queue", "next_timeout", "__vec_push", "_msg"]
 
-	handshake_timeout = 5000
-
 	def __init__(self, flags, sendmsg, msg):
 		self.ptr = ffi.new("gnutls_session_t*")
 		GNUTLSError.check(lib.gnutls_init(self.ptr, flags))
@@ -157,7 +155,6 @@ class Session(object):
 		lib.gnutls_transport_set_vec_push_function(self.v, self.__vec_push)
 		lib.gnutls_transport_set_pull_function(self.v, self.__pull)
 		lib.gnutls_transport_set_pull_timeout_function(self.v, self.__pull_timeout)
-		#lib.gnutls_handshake_set_timeout(self.v, self.handshake_timeout)
 		self._queue = None
 
 	@property

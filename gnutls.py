@@ -2,7 +2,6 @@ import errno
 
 from gnutls_ffi import ffi, lib
 from gnutls_const import *
-from gnutls_dtls import *
 from gnutls_common import GNUTLSError, GNUTLSCertificateError, cstring_wrap, Datum, _GC
 
 class _AnonCredentials(object):

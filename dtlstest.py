@@ -1,14 +1,46 @@
+import os
 import struct
 
-from gnutls_ffi import ffi
+from gnutls_ffi import lib, ffi
 from gnutls_const import GNUTLS_SERVER, GNUTLS_CLIENT, GNUTLS_DATAGRAM, GNUTLS_NONBLOCK, GNUTLS_E_AGAIN, GNUTLS_E_BAD_COOKIE, GNUTLS_E_TIMEDOUT, GNUTLS_E_FATAL_ALERT_RECEIVED, GNUTLS_E_REHANDSHAKE, GNUTLS_E_UNEXPECTED_PACKET_LENGTH
-from gnutls_common import GNUTLSError
+from gnutls_common import GNUTLSError, Datum
 from gnutls import Session
-from gnutls_dtls import CookieFactory
 
 from reactor import clock
 from util import log
 from sockmsg import TargetedMessage, name_to_addrtuple
+
+class CookieFactory(object):
+	rnd = Datum(os.urandom(16))
+
+	def __init__(self, sendmsg):
+		self.transport = ffi.cast("void*", -1)
+		self.prestate = ffi.new("gnutls_dtls_prestate_st*")
+		self._push = ffi.callback("gnutls_push_func", self.push)
+		self._sendmsg = sendmsg
+
+		self._iov = ffi.new("struct iovec[]", 1)
+
+		self._msg = ffi.new("struct msghdr*")
+		self._msg.msg_control = ffi.cast("void*", 0)
+		self._msg.msg_controllen = 0
+		self._msg.msg_flags = 0
+		self._msg.msg_iov = self._iov
+		self._msg.msg_iovlen = 1
+
+	def push(self, transport, data, size):
+		m = self._msg
+		m.msg_iov[0].iov_base = data
+		m.msg_iov[0].iov_len = size
+		return self._sendmsg(m)
+
+	def verify(self, data, bytes, name, namelen):
+		GNUTLSError.check(lib.gnutls_dtls_cookie_verify(self.rnd.v, name, namelen, data, bytes, self.prestate))
+
+	def send(self, name, namelen):
+		self._msg.msg_name = name
+		self._msg.msg_namelen = namelen
+		return GNUTLSError.check(lib.gnutls_dtls_cookie_send(self.rnd.v, name, namelen, self.prestate, self.transport, self._push))
 
 class TooManyConnections(Exception):
 	pass

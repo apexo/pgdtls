@@ -199,9 +199,10 @@ def up(args, tap):
 def main():
 	args = parse_arguments()
 
-	# TODO: should probably unset IPV6_V6ONLY when we want INET and INET6
 	af = socket.AF_INET6 if socket.AF_INET6 in args.af else socket.AF_INET
 	s = socket.socket(af, socket.SOCK_DGRAM)
+	if af == socket.AF_INET6:
+		s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, socket.AF_INET in args.af)
 	if args.listen_port:
 		listen_host = "0.0.0.0" if af == socket.AF_INET else "::"
 		s.bind((listen_host, args.listen_port))

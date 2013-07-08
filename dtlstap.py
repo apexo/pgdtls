@@ -199,7 +199,7 @@ def up(args, tap):
 def main():
 	args = parse_arguments()
 
-	# TODO: should probably send IPV6_V6ONLY when we want INET and INET6
+	# TODO: should probably unset IPV6_V6ONLY when we want INET and INET6
 	af = socket.AF_INET6 if socket.AF_INET6 in args.af else socket.AF_INET
 	s = socket.socket(af, socket.SOCK_DGRAM)
 	if args.listen_port:
